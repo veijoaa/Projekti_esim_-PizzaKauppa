@@ -1,1 +1,159 @@
+name: Create Full Project Setup (Labels + Milestones + Issues + Project Linking)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup_project:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ---------------------------
+      # CREATE LABELS
+      # ---------------------------
+      - name: Create Labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              { name: "frontend", color: "1f77b4" },
+              { name: "backend", color: "ff7f0e" },
+              { name: "database", color: "2ca02c" },
+              { name: "documentation", color: "9467bd" },
+              { name: "design", color: "8c564b" },
+              { name: "bug", color: "d62728" },
+              { name: "testing", color: "bcbd22" },
+              { name: "admin-panel", color: "17becf" },
+              { name: "high-priority", color: "e377c2" },
+              { name: "low-priority", color: "7f7f7f" }
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color
+                });
+              } catch (e) {
+                console.log(`Label ${label.name} exists, skipping`);
+              }
+            }
+
+      # ---------------------------
+      # CREATE MILESTONES
+      # ---------------------------
+      - name: Create Milestones
+        id: create_ms
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const titles = [
+              "Milestone 1 – Projektin aloitus ja määrittely",
+              "Milestone 2 – Suunnittelu (UI + tietokanta)",
+              "Milestone 3 – Frontend-perustoiminnot",
+              "Milestone 4 – Backend-perustoiminnot",
+              "Milestone 5 – Integrointi ja testaus",
+              "Milestone 6 – Dokumentointi ja esitys"
+            ];
+
+            const map = {};
+
+            for (const title of titles) {
+              const ms = await github.rest.issues.createMilestone({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title
+              });
+              map[title] = ms.data.number;
+            }
+
+            core.setOutput('milestones', JSON.stringify(map));
+
+      # ---------------------------
+      # CREATE ISSUES
+      # ---------------------------
+      - name: Create Issues
+        id: create_issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ms = JSON.parse(core.getInput('milestones'));
+
+            const issues = [
+              // Milestone 1
+              { title: "Luo GitHub-repository projektille", labels: ["documentation"], milestone: "Milestone 1 – Projektin aloitus ja määrittely" },
+              { title: "Luo GitHub Projects -taulu (Kanban)", labels: ["documentation"], milestone: "Milestone 1 – Projektin aloitus ja määrittely" },
+              { title: "Laadi projektisuunnitelma", labels: ["documentation"], milestone: "Milestone 1 – Projektin aloitus ja määrittely" },
+              { title: "Tee ryhmän työnjako", labels: ["documentation"], milestone: "Milestone 1 – Projektin aloitus ja määrittely" },
+
+              // Milestone 2
+              { title: "Tee käyttöliittymä-mockup", labels: ["design"], milestone: "Milestone 2 – Suunnittelu (UI + tietokanta)" },
+              { title: "Laadi tietokantakaavio", labels: ["database"], milestone: "Milestone 2 – Suunnittelu (UI + tietokanta)" },
+              { title: "Suunnittele sivurakenne ja navigaatio", labels: ["design"], milestone: "Milestone 2 – Suunnittelu (UI + tietokanta)" },
+
+              // Milestone 3
+              { title: "Luo perus-HTML/CSS-rakenne", labels: ["frontend"], milestone: "Milestone 3 – Frontend-perustoiminnot" },
+              { title: "Toteuta tuotelistan näyttäminen", labels: ["frontend"], milestone: "Milestone 3 – Frontend-perustoiminnot" },
+              { title: "Toteuta ostoskori", labels: ["frontend"], milestone: "Milestone 3 – Frontend-perustoiminnot" },
+              { title: "Lisää responsiivinen navigaatio", labels: ["frontend"], milestone: "Milestone 3 – Frontend-perustoiminnot" },
+
+              // Milestone 4
+              { title: "Luo API tuotteiden noutamiseen", labels: ["backend", "database"], milestone: "Milestone 4 – Backend-perustoiminnot" },
+              { title: "Luo API tilauksen tallentamiseen", labels: ["backend", "database"], milestone: "Milestone 4 – Backend-perustoiminnot" },
+              { title: "Toteuta tietokantataulut", labels: ["database"], milestone: "Milestone 4 – Backend-perustoiminnot" },
+              { title: "Admin-paneeli – lisää tuotteen lisäystoiminto", labels: ["backend", "admin-panel"], milestone: "Milestone 4 – Backend-perustoiminnot" },
+
+              // Milestone 5
+              { title: "Yhdistä frontend ja backend", labels: ["frontend", "backend"], milestone: "Milestone 5 – Integrointi ja testaus" },
+              { title: "Kirjoita testauslista", labels: ["testing"], milestone: "Milestone 5 – Integrointi ja testaus" },
+              { title: "Korjaa löydetyt bugit", labels: ["bug"], milestone: "Milestone 5 – Integrointi ja testaus" },
+
+              // Milestone 6
+              { title: "Kirjoita lopullinen README", labels: ["documentation"], milestone: "Milestone 6 – Dokumentointi ja esitys" },
+              { title: "Tee käyttöohje (User Guide)", labels: ["documentation"], milestone: "Milestone 6 – Dokumentointi ja esitys" },
+              { title: "Tee projektin esitysmateriaali", labels: ["documentation"], milestone: "Milestone 6 – Dokumentointi ja esitys" }
+            ];
+
+            const created = [];
+
+            for (const issue of issues) {
+              const newIssue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issue.title,
+                labels: issue.labels,
+                milestone: ms[issue.milestone]
+              });
+              created.push(newIssue.data.number);
+            }
+
+            core.setOutput("issues", JSON.stringify(created));
+
+      # ---------------------------
+      # ADD ISSUES TO PROJECT (requires ProjectV2)
+      # ---------------------------
+      - name: Add Issues to GitHub Project
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const projectId = "<YOUR_PROJECT_ID>";  // Täytä itse
+            const issues = JSON.parse(core.getInput("issues"));
+
+            for (const issueNumber of issues) {
+              await github.graphql(`
+                mutation($project: ID!, $issue: ID!) {
+                  addProjectV2ItemById(input: {projectId: $project, contentId: $issue}) {
+                    item {
+                      id
+                    }
+                  }
+                }
+              `, {
+                project: projectId,
+                issue: `gid://github/Issue/${issueNumber}`
+              });
+            }
 
